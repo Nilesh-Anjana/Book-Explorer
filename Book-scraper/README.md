@@ -283,4 +283,4 @@ curl -X POST http://localhost:5000/api/refresh
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-**Built with ❤️ by TANMAY JAIN**
+
