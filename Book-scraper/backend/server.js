@@ -10,11 +10,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enhanced CORS setup (you'll update this with your Vercel URL later)
+// ✅ Proper CORS setup for local + deployed frontend
 app.use(cors({
-  origin: '*',  // Allows all origins - USE ONLY FOR TESTING
-  credentials: false
+  origin: [
+    "http://localhost:3000",             // local React frontend
+    "https://book-explorer.vercel.app"   // deployed Vercel frontend
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
 }));
+
 
 
 app.use(express.json());
