@@ -1,33 +1,46 @@
+// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Book = require('./models/book');
-const { spawn } = require('child_process');
-const path = require('path');
+const { scrapeBooksToScrape } = require('./scraper'); // Import the scraper function
 const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Proper CORS setup for local + deployed frontend
-app.use(cors({
-  origin: [
-    "http://localhost:3000",             // local React frontend
-    "https://book-explorer.vercel.app"   // deployed Vercel frontend
-  ],
+// ✅ PERMANENT CORS FIX IS HERE
+// This new configuration automatically allows requests from any of your Vercel preview deployments.
+const vercelRegex = /^https:\/\/book-explorer-.*-nilesh-s-projects.*\.vercel\.app$/;
+
+const corsOptions = {
+  // The origin function checks if the incoming request URL matches our rules
+  origin: function (origin, callback) {
+    // Allow requests from localhost, the main Vercel app, and any Vercel preview URLs
+    if (
+      !origin || 
+      origin === 'http://localhost:3000' || 
+      origin === 'https://book-explorer.vercel.app' || 
+      vercelRegex.test(origin)
+    ) {
+      callback(null, true); // Allow the request
+    } else {
+      callback(new Error('Not allowed by CORS')); // Block the request
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
-// MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ✅ ROOT ROUTE HANDLER - FIXES "Cannot GET /" ERROR
 app.get('/', (req, res) => {
   res.json({
     message: '📚 Book Explorer API is running!',
@@ -37,14 +50,14 @@ app.get('/', (req, res) => {
       'Health Check': '/api/health',
       'Get Books': '/api/books',
       'Get Single Book': '/api/books/:id',
-      'Refresh Data': 'POST /api/refresh'
+      'Refresh Data': 'POST /api/refresh',
+      'Run Scraper': 'GET /run-scraper'
     },
     version: '1.0.0',
     developer: 'Nilesh'
   });
 });
 
-// Get all books with filters
 app.get('/api/books', async (req, res) => {
   try {
     const {
@@ -84,7 +97,6 @@ app.get('/api/books', async (req, res) => {
   }
 });
 
-// Get single book by ID
 app.get('/api/books/:id', async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
@@ -95,33 +107,26 @@ app.get('/api/books/:id', async (req, res) => {
   }
 });
 
-// Refresh books data (trigger scraper)
+app.get('/run-scraper', async (req, res) => {
+  try {
+    await scrapeBooksToScrape();
+    res.json({ message: "✅ Scraper executed successfully!" });
+  } catch (err) {
+    console.error("❌ Scraper failed:", err);
+    res.status(500).json({ error: "Scraper failed", details: err.message });
+  }
+});
+
 app.post('/api/refresh', async (req, res) => {
   try {
     console.log('🔄 Refresh endpoint triggered - Starting scraper...');
-    const scraperPath = path.join(__dirname, 'scraper.js'); // backend ke andar ab scraper
-
-    const scraperProcess = spawn('node', [scraperPath], { stdio: 'pipe' });
-
-    scraperProcess.stdout.on('data', (data) => {
-      console.log(`📊 Scraper: ${data}`);
-    });
-
-    scraperProcess.stderr.on('data', (data) => {
-      console.error(`❌ Scraper Error: ${data}`);
-    });
-
-    scraperProcess.on('close', (code) => {
-      console.log(`✅ Scraper process finished with code: ${code}`);
-    });
-
+    await scrapeBooksToScrape();
     res.json({
       success: true,
       message: 'Data refresh initiated successfully',
       timestamp: new Date().toISOString(),
-      status: 'Scraper started in background'
+      status: 'Scraper finished'
     });
-
   } catch (error) {
     console.error('❌ Error triggering scraper:', error);
     res.status(500).json({
@@ -132,20 +137,14 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
-// Health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Cron job for scheduled scraping at 2:00 AM IST daily
-cron.schedule('0 2 * * *', () => {
+cron.schedule('0 2 * * *', async () => {
   console.log('🕐 Scheduled scraper execution started at:', new Date().toISOString());
-  const scraperPath = path.join(__dirname, 'scraper.js');
-  const scraperProcess = spawn('node', [scraperPath]);
-
-  scraperProcess.stdout.on('data', (data) => console.log(`📊 Scheduled Scraper: ${data}`));
-  scraperProcess.stderr.on('data', (data) => console.error(`❌ Scheduled Scraper Error: ${data}`));
-  scraperProcess.on('close', (code) => console.log(`✅ Scheduled scraper completed with code: ${code}`));
+  await scrapeBooksToScrape();
+  console.log('✅ Scheduled scraper completed');
 }, { timezone: "Asia/Kolkata" });
 
 console.log('⏰ Cron job scheduled: Daily scraper at 2:00 AM IST');
