@@ -13,7 +13,7 @@ async function scrapeBooksToScrape() {
   console.log('🚀 Starting scraper...');
 
   const browser = await puppeteer.launch({
-    headless: false, // debug ke liye false, deploy me true kar sakte ho
+    headless: true, // render.com pe true rakho, local debug ke liye false kar sakte ho
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
@@ -79,5 +79,7 @@ async function scrapeBooksToScrape() {
   mongoose.connection.close();
 }
 
-// Run scraper
-scrapeBooksToScrape().catch(console.error);
+module.exports = scrapeBooksToScrape;
+
+// Uncomment below line to run directly
+// scrapeBooksToScrape().catch(console.error);

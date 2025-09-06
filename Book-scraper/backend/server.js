@@ -20,11 +20,12 @@ app.use(cors({
   credentials: true
 }));
 
-
-
 app.use(express.json());
 
-mongoose.connect(process.env.MONGODB_URI);
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // ✅ ROOT ROUTE HANDLER - FIXES "Cannot GET /" ERROR
 app.get('/', (req, res) => {
@@ -39,11 +40,11 @@ app.get('/', (req, res) => {
       'Refresh Data': 'POST /api/refresh'
     },
     version: '1.0.0',
-    developer: 'nilesh anjana'
+    developer: 'Nilesh'
   });
 });
 
-// Your existing API routes (unchanged)
+// Get all books with filters
 app.get('/api/books', async (req, res) => {
   try {
     const {
@@ -62,13 +63,8 @@ app.get('/api/books', async (req, res) => {
       price: { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) }
     };
 
-    if (search) {
-      filter.title = { $regex: search, $options: 'i' };
-    }
-
-    if (stock !== 'all') {
-      filter.stock = stock === 'in-stock' ? 'In stock' : 'Out of stock';
-    }
+    if (search) filter.title = { $regex: search, $options: 'i' };
+    if (stock !== 'all') filter.stock = stock === 'in-stock' ? 'In stock' : 'Out of stock';
 
     const books = await Book.find(filter)
       .limit(limit * 1)
@@ -88,27 +84,24 @@ app.get('/api/books', async (req, res) => {
   }
 });
 
+// Get single book by ID
 app.get('/api/books/:id', async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
-    if (!book) {
-      return res.status(404).json({ error: 'Book not found' });
-    }
+    if (!book) return res.status(404).json({ error: 'Book not found' });
     res.json(book);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Refresh books data (trigger scraper)
 app.post('/api/refresh', async (req, res) => {
   try {
     console.log('🔄 Refresh endpoint triggered - Starting scraper...');
-    
-    const scraperPath = path.join(__dirname, '../scraper/scraper.js');
-    
-    const scraperProcess = spawn('node', [scraperPath], {
-      stdio: 'pipe'
-    });
+    const scraperPath = path.join(__dirname, 'scraper.js'); // backend ke andar ab scraper
+
+    const scraperProcess = spawn('node', [scraperPath], { stdio: 'pipe' });
 
     scraperProcess.stdout.on('data', (data) => {
       console.log(`📊 Scraper: ${data}`);
@@ -139,31 +132,21 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
+// Health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Cron job for scheduled scraping
+// Cron job for scheduled scraping at 2:00 AM IST daily
 cron.schedule('0 2 * * *', () => {
   console.log('🕐 Scheduled scraper execution started at:', new Date().toISOString());
-  
-  const scraperPath = path.join(__dirname, '../scraper/scraper.js');
+  const scraperPath = path.join(__dirname, 'scraper.js');
   const scraperProcess = spawn('node', [scraperPath]);
 
-  scraperProcess.stdout.on('data', (data) => {
-    console.log(`📊 Scheduled Scraper: ${data}`);
-  });
-
-  scraperProcess.stderr.on('data', (data) => {
-    console.error(`❌ Scheduled Scraper Error: ${data}`);
-  });
-
-  scraperProcess.on('close', (code) => {
-    console.log(`✅ Scheduled scraper completed with code: ${code}`);
-  });
-}, {
-  timezone: "Asia/Kolkata"  
-});
+  scraperProcess.stdout.on('data', (data) => console.log(`📊 Scheduled Scraper: ${data}`));
+  scraperProcess.stderr.on('data', (data) => console.error(`❌ Scheduled Scraper Error: ${data}`));
+  scraperProcess.on('close', (code) => console.log(`✅ Scheduled scraper completed with code: ${code}`));
+}, { timezone: "Asia/Kolkata" });
 
 console.log('⏰ Cron job scheduled: Daily scraper at 2:00 AM IST');
 
