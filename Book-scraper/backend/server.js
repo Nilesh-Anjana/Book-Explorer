@@ -39,7 +39,7 @@ app.get('/', (req, res) => {
       'Refresh Data': 'POST /api/refresh'
     },
     version: '1.0.0',
-    developer: 'Tanmay Jain'
+    developer: 'nilesh anjana'
   });
 });
 
