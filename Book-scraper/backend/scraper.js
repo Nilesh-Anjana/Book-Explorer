@@ -1,19 +1,16 @@
-const puppeteer = require('puppeteer'); // puppeteer-core ki jagah puppeteer
+const puppeteer = require('puppeteer'); 
 const mongoose = require('mongoose');
 const Book = require('./models/book');
 require('dotenv').config();
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+mongoose.connect(process.env.MONGODB_URI);
 
 async function scrapeBooksToScrape() {
   console.log('🚀 Starting scraper...');
 
   const browser = await puppeteer.launch({
-    headless: true, // render.com pe true rakho, local debug ke liye false kar sakte ho
+    headless: true, 
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
@@ -30,7 +27,13 @@ async function scrapeBooksToScrape() {
       ? 'https://books.toscrape.com/'
       : `https://books.toscrape.com/catalogue/page-${currentPage}.html`;
 
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 }); // timeout fix
+    try {
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      console.log(`🌐 Loaded: ${url}`);
+    } catch (err) {
+      console.error(`❌ Failed to load page ${currentPage}:`, err.message);
+      break;
+    }
 
     // Extract book data
     const books = await page.evaluate(() => {
@@ -60,18 +63,13 @@ async function scrapeBooksToScrape() {
     allBooks.push(...books);
     console.log(`✅ Found ${books.length} books on page ${currentPage}`);
 
-    // Check if next page exists
     hasNextPage = await page.$('.next') !== null;
+    console.log(`➡️ Has next page: ${hasNextPage}`);
     currentPage++;
   }
 
-  // Save to database
   console.log(`💾 Saving ${allBooks.length} books to database...`);
-
-  // Clear existing data
   await Book.deleteMany({});
-
-  // Insert new data
   await Book.insertMany(allBooks);
 
   console.log('✅ Scraping completed successfully!');
@@ -79,7 +77,7 @@ async function scrapeBooksToScrape() {
   mongoose.connection.close();
 }
 
-module.exports = scrapeBooksToScrape;
-
-// Uncomment below line to run directly
-// scrapeBooksToScrape().catch(console.error);
+// Call the function (was commented out earlier)
+scrapeBooksToScrape()
+  .then(() => console.log("🎉 Done"))
+  .catch(err => console.error("❌ Error in scraper:", err));
